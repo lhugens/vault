@@ -1,0 +1,236 @@
+#!/bin/bash
+
+# CHECK FUNCTIONS
+
+check_root() {
+    if ! [ $(id -u) = 0 ]; then
+        printf "The script has to be run as root." >&2
+        exit 1
+    fi
+
+    if [ $SUDO_USER ]; then
+        REAL_USER=$SUDO_USER
+    else
+        REAL_USER=$(whoami)
+    fi
+}
+
+check_masterkey() {
+    if ! [ -d .vault ]; then
+        printf "There is no vault in this directory."
+        exit 0
+    fi
+
+    VAULT=$(pwd)/.vault
+    read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
+    SHAKEY_INPUT=".vault/key_$(printf '%s\n' "$MASTERKEY$VAULT" | sha512sum)"
+    SHAKEY_REAL=$(sudo find .vault/ | grep -a "key")
+    
+
+    if [ "$SHAKEY_INPUT" = "$SHAKEY_REAL" ]; then 
+        printf "Opening vault...\n"
+        sleep 1
+        printf "Vault successfully opened.\n"   
+    else
+        sleep 1
+        printf "Incorrect masterkey. Quitting...\n"
+        exit 1
+    fi
+}
+
+# CORE COMMAND FUNCTIONS
+
+cmd_init() {
+    if [ -d .vault ]; then
+        printf "There is already a vault in this directory. Quitting...\n"
+        exit 1
+    fi
+
+    read -sp 'New masterkey: '      MASTERKEY   ; printf "\n"
+    read -sp 'Confirm masterkey: '  MASTERKEY1  ; printf "\n"
+
+    if [ "$MASTERKEY" != "$MASTERKEY1" ]; then 
+        printf "Masterkeys did not match. Quitting...\n"  
+        exit 1  
+    else
+        printf "Masterkeys matched.\n"
+    fi
+
+    sudo mkdir -m 600 .vault 
+
+    if [ -d .vault ]; then
+        VAULT=$(pwd)/.vault
+        printf "Vault created in $VAULT\n"
+    fi
+
+    sudo install -b -m 600 /dev/null $VAULT/"key_$(printf '%s\n' "$MASTERKEY$VAULT" | sha512sum)"
+}
+
+cmd_add(){
+    check_masterkey
+
+    TRUEKEY="$(printf '%s\n' $SHAKEY_REAL | sha512sum)"
+
+    printf "Creating new vault entry....\n"
+
+    read -p     'Enter id      : '     ID
+    read -p     'Enter platform: '     PLATFORM
+    stty -echo
+    read -sp    'Enter password: '     PASSWORD     ; printf "\n"
+
+    stty echo
+
+    ea_ENTRYNAME=$(printf '%s\n' "${ID}_${PLATFORM}" | openssl enc -e -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY" | tr '/' '-')
+    ea_FILENAME=$VAULT/"entry_$ea_ENTRYNAME"
+    ea_CONTENT=$(printf '%s\n' "$PASSWORD"      | openssl enc -e -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY" | tr '/' '-')
+    
+    sudo install -b -m 600 /dev/null $ea_FILENAME
+
+    sudo printf '%s\n' "$ea_CONTENT" | sudo tee $ea_FILENAME > /dev/null
+
+    printf "Entry sucessfully stored.\n"
+    exit 0
+}
+
+cmd_get(){
+    check_masterkey
+
+    TRUEKEY="$(printf '%s\n' $SHAKEY_REAL | sha512sum)"
+
+    read -p 'Enter search string: ' SS
+
+    printf "Searching vault for matches with "$SS"\n"
+
+    INT=0
+
+    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r eg_FILENAME; do 
+
+        INT=$((INT+1))
+
+        eg_ENTRYNAME=$(printf '%s\n' "$eg_FILENAME" | awk -F '_' '{print $2}')
+
+        dg_ENTRYNAME=$(printf '%s\n' "$eg_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
+
+        printf '%s' "$dg_ENTRYNAME" | grep -ia "$SS" > /dev/null
+
+        if [ $? -eq 0 ]; then
+            printf '%s\n' "(${INT}) ${dg_ENTRYNAME}"
+        fi
+
+    done
+
+    read -p 'Number of entry to get: ' EN 
+
+    eg_FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${EN}"p)
+    eg_ENTRYNAME=$(printf '%s\n' "$eg_FILENAME" | awk -F '_' '{print $2}')
+    dg_ENTRYNAME=$(printf '%s\n' "$eg_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
+
+    printf '%s' "The password for "${dg_ENTRYNAME}" is: " 
+
+    printf '%s\n' "$(sudo cat "${eg_FILENAME}")"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY";
+
+}
+
+cmd_remove(){
+    check_masterkey
+
+    TRUEKEY="$(printf '%s\n' $SHAKEY_REAL | sha512sum)"
+
+    read -p 'Enter search string: ' SS
+
+    printf "Searching vault for matches with "$SS"\n"
+
+    INT=0
+
+    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r er_FILENAME; do 
+
+        INT=$((INT+1))
+
+        er_ENTRYNAME=$(printf '%s\n' "$er_FILENAME" | awk -F '_' '{print $2}')
+
+        dr_ENTRYNAME=$(printf '%s\n' "$er_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
+
+        printf '%s' "$dr_ENTRYNAME" | grep -ia "$SS" > /dev/null
+
+        if [ $? -eq 0 ]; then
+            printf '%s\n' "(${INT}) ${dr_ENTRYNAME}"
+        fi
+
+    done
+
+    read -p 'Number of entry to remove: ' EN 
+
+    er_FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${EN}"p)
+    er_ENTRYNAME=$(printf '%s\n' "$er_FILENAME" | awk -F '_' '{print $2}')
+    dr_ENTRYNAME=$(printf '%s\n' "$er_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
+
+    printf '%s\n' "Removing entry "${dr_ENTRYNAME}" ..." 
+
+    sudo rm $er_FILENAME
+
+    if [ $? -eq 0 ]; then
+        printf '%s\n' "Entry sucessfully removed"
+        exit 0
+    fi
+
+    exit 1
+}
+
+# HELP FUNCTIONS
+
+vault_version() {
+	cat <<-_EOF
+	=============================================
+	= vault: the standard unix password vault   =
+	=                                           =
+	=                  v0.0.1                   =
+	=                                           =
+	=              Leonardo Hügens              =
+	=        https://github.com/lhugens/        =
+	=                                           =
+	=============================================
+	_EOF
+}
+
+vault_help() {
+	cat <<-_EOF
+	Usage:
+	    $PROGRAM init
+	        Create vault in current directory.
+
+	    $PROGRAM add
+	        Add entry to vault.
+
+	    $PROGRAM get
+	        Get entry from vault.
+
+	    $PROGRAM remove
+	        Remove existing entry.
+
+	    $PROGRAM help
+	        Show this text.
+
+	    $PROGRAM version
+	        Show version information.
+	_EOF
+}
+
+# FUNCTION CALLING
+
+check_root
+
+case "$1" in
+	init    ) shift; cmd_init   "$@" ;;
+    add     ) shift; cmd_add    "$@" ;;
+    get     ) shift; cmd_get    "$@" ;;
+    remove  ) shift; cmd_remove "$@" ;;
+    version|--version|\? ) vault_version ;;
+    help|--help|\? ) vault_help ;;
+	* )
+		if [ ! -z "$1" ]; then
+            printf '%s\n' "Wrong usage of vault."
+            vault_help
+		fi
+		;;
+esac
+exit 0
