@@ -221,6 +221,8 @@ case "$1" in
 		if [ ! -z "$1" ]; then
             printf '%s\n' "Wrong usage of vault."
             vault_help
+        else
+            vault_help
 		fi
 		;;
 esac
