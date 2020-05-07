@@ -7,7 +7,7 @@ Vault is a password-storage utility. It stores passwords using the AES encryptio
 I'm in no way an expert in shell scripting or cryptography. However, I'll try to update this script regularly and make it more robust and safe. 
 I hope this script will eventually be analysed by security experts so that it can be used with more confidence.
 
-## Instalation
+## Installation
 
 Clone the repository, hop into the repo's directory and run install.sh:
 
