@@ -9,10 +9,27 @@ I hope this script will eventually be analysed by security experts so that it ca
 
 ## Instalation
 
-Run this command: 
+Clone the repository, hop into the repo's directory and run install.sh:
 
 ```
-git clone https://github.com/lhugens/vault && cd vault && make install && cd -
+$ git clone https://github.com/lhugens/vault && cd vault && sh install.sh
 ```
+
+To remove the program, just run `sh uninstall.sh`.
 
 ## Usage
+
+There are five usage commands, which you can see by running `sudo vault help`:
+
+```
+$ sudo vault help
+Usage: sudo vault [OPTION]
+        
+     init       Create vault in current directory.
+     add        Add entry to vault. 
+     get        Get entry from vault.
+     remove     Remove existing entry.
+     help       Show this text.
+     version    Show version information.
+
+```

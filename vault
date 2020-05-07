@@ -194,24 +194,15 @@ vault_version() {
 
 vault_help() {
 	cat <<-_EOF
-	Usage:
-	    $PROGRAM init
-	        Create vault in current directory.
-
-	    $PROGRAM add
-	        Add entry to vault.
-
-	    $PROGRAM get
-	        Get entry from vault.
-
-	    $PROGRAM remove
-	        Remove existing entry.
-
-	    $PROGRAM help
-	        Show this text.
-
-	    $PROGRAM version
-	        Show version information.
+	Usage: sudo vault [OPTION]
+        $PROGRAM
+	    $PROGRAM init       Create vault in current directory.
+	    $PROGRAM add        Add entry to vault. 
+	    $PROGRAM get        Get entry from vault.
+	    $PROGRAM remove     Remove existing entry.
+	    $PROGRAM help       Show this text.
+	    $PROGRAM version    Show version information.
+        $PROGRAM
 	_EOF
 }
 
