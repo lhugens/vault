@@ -11,7 +11,7 @@ encrypt() {
 }
 
 decrypt() {
-    printf '%s\n' "$1"  | tr '-' '/' | openssl enc -base64 -d | openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -salt -k "$2"
+    printf '%s\n' "$1"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$2"
 }
 
 
