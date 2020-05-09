@@ -8,6 +8,6 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
         SCRIPTDIR=/usr/local/bin
 fi
 
-printf '%s\n' "Script removed from "${SCRIPTDIR}""
-
 [ -f ${SCRIPTDIR}/vault ] && sudo rm ${SCRIPTDIR}/vault || true
+
+printf '%s\n' "Script removed from "${SCRIPTDIR}""

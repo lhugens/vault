@@ -9,13 +9,13 @@ I hope this script will eventually be analysed by security experts so that it ca
 
 ## Installation
 
-Clone the repository, hop into the repo's directory and run `bash install`, like so:
+Clone the repository, hop into the repo's directory and run `bash install.bash`, like so:
 
 ```
-$ git clone https://github.com/lhugens/vault && cd vault && bash install
+$ git clone https://github.com/lhugens/vault && cd vault && bash install.bash
 ```
 
-To remove the program, just run `bash uninstall`.
+To remove the program, just run `bash uninstall.bash`.
 
 ## Usage
 

@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# HASH, ENCRYPT AND DECRYPR FUNCTIONS
+
+hash() {
+    printf '%s\n' "$1" | openssl sha512 | awk '{ gsub("(stdin)= ","",$2); print $2}'
+}
+
+
 # CHECK FUNCTIONS
 
 check_root() {
@@ -24,8 +31,12 @@ check_masterkey() {
     VAULT=$(pwd)/.vault
     read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
     SHAKEY_INPUT=".vault/key_$(printf '%s\n' "$MASTERKEY$VAULT" | sha512sum)"
+    SHAKEY_TEST=$(hash "${MASTERKEY}${VAULT}")
     SHAKEY_REAL=$(sudo find .vault/ | grep -a "key")
     
+    
+    echo "$SHAKEY_REAL" 
+    echo "$SHAKEY_TEST"
 
     if [ "$SHAKEY_INPUT" = "$SHAKEY_REAL" ]; then 
         printf "Opening vault...\n"

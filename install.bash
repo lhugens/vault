@@ -8,12 +8,9 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
         SCRIPTDIR=/usr/local/bin
 fi
 
+
+[ -f vault ] && sudo cp vault ${SCRIPTDIR} || true
+
+[ -f ${SCRIPTDIR}/vault ] && sudo chmod 100 ${SCRIPTDIR}/vault || true
+
 printf '%s\n' "Script location: "${SCRIPTDIR}/vault""
-
-[ -f vault ] && sudo cp vault ${SCRIPTDIR} || true
-
-[ -f ${SCRIPTDIR}/vault ] && sudo chmod 100 ${SCRIPTDIR}/vault || true
-
-[ -f vault ] && sudo cp vault ${SCRIPTDIR} || true
-
-[ -f ${SCRIPTDIR}/vault ] && sudo chmod 100 ${SCRIPTDIR}/vault || true
