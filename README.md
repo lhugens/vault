@@ -29,6 +29,7 @@ Usage: sudo vault [OPTION]
      add        Add entry to vault. 
      get        Get entry from vault.
      remove     Remove existing entry.
+     destroy    Completely remove vault in current directory.
      help       Show this text.
      version    Show version information.
 
