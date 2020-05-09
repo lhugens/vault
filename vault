@@ -1,9 +1,17 @@
 #!/bin/bash
 
-# HASH, ENCRYPT AND DECRYPR FUNCTIONS
+# HASH, ENCRYPT AND DECRYPT FUNCTIONS
 
 hash() {
     printf '%s\n' "$1" | openssl sha512 | awk '{ gsub("(stdin)= ","",$2); print $2}'
+}
+
+encrypt() {
+    printf '%s\n' "$1" | openssl enc -e -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$2" | tr '/' '-'
+}
+
+decrypt() {
+    printf '%s\n' "$1"  | tr '-' '/' | openssl enc -base64 -d | openssl enc -d -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -salt -k "$2"
 }
 
 
@@ -30,18 +38,12 @@ check_masterkey() {
 
     VAULT=$(pwd)/.vault
     read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
-    SHAKEY_INPUT=".vault/key_$(printf '%s\n' "$MASTERKEY$VAULT" | sha512sum)"
-    SHAKEY_TEST=$(hash "${MASTERKEY}${VAULT}")
-    SHAKEY_REAL=$(sudo find .vault/ | grep -a "key")
+    SHAKEY_INPUT="$(hash ${MASTERKEY})"
+    SHAKEY_REAL=$(sudo find .vault/ | grep -a "key" | awk '{ gsub(".vault/key_","",$1); print $1}')
     
-    
-    echo "$SHAKEY_REAL" 
-    echo "$SHAKEY_TEST"
-
     if [ "$SHAKEY_INPUT" = "$SHAKEY_REAL" ]; then 
-        printf "Opening vault...\n"
         sleep 1
-        printf "Vault successfully opened.\n"   
+        KEY="$(hash ${MASTERKEY}${SHAKEY_INPUT})"
     else
         sleep 1
         printf "Incorrect masterkey. Quitting...\n"
@@ -72,32 +74,28 @@ cmd_init() {
     if [ -d .vault ]; then
         VAULT=$(pwd)/.vault
         printf "Vault created in $VAULT\n"
-    fi
+    fi 
 
-    sudo install -b -m 600 /dev/null $VAULT/"key_$(printf '%s\n' "$MASTERKEY$VAULT" | sha512sum)"
+    sudo install -b -m 600 /dev/null $VAULT/"key_$(hash "${MASTERKEY}")"
 }
 
 cmd_add(){
     check_masterkey
 
-    TRUEKEY="$(printf '%s\n' $SHAKEY_REAL | sha512sum)"
-
-    printf "Creating new vault entry....\n"
-
-    read -p     'Enter id      : '     ID
-    read -p     'Enter platform: '     PLATFORM
+    read -p     'Enter id : '           ID
+    read -p     'Enter platform : '     PLATFORM
     stty -echo
-    read -sp    'Enter password: '     PASSWORD     ; printf "\n"
+    read -sp    'Enter password : '     PASSWORD     ; printf "\n"
 
     stty echo
 
-    ea_ENTRYNAME=$(printf '%s\n' "${ID}_${PLATFORM}" | openssl enc -e -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY" | tr '/' '-')
-    ea_FILENAME=$VAULT/"entry_$ea_ENTRYNAME"
-    ea_CONTENT=$(printf '%s\n' "$PASSWORD"      | openssl enc -e -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY" | tr '/' '-')
-    
-    sudo install -b -m 600 /dev/null $ea_FILENAME
+    ENTRYNAME=$(encrypt ${ID}_${PLATFORM} ${KEY})
+    FILENAME=$VAULT/"entry_${ENTRYNAME}" 
+    CONTENT=$(encrypt ${PASSWORD} ${KEY})
 
-    sudo printf '%s\n' "$ea_CONTENT" | sudo tee $ea_FILENAME > /dev/null
+    sudo install -b -m 600 /dev/null $FILENAME
+
+    sudo printf '%s\n' "${CONTENT}" | sudo tee $FILENAME > /dev/null
 
     printf "Entry sucessfully stored.\n"
     exit 0
@@ -106,85 +104,86 @@ cmd_add(){
 cmd_get(){
     check_masterkey
 
-    TRUEKEY="$(printf '%s\n' $SHAKEY_REAL | sha512sum)"
-
-    read -p 'Enter search string: ' SS
-
-    printf "Searching vault for matches with "$SS"\n"
+    read -p 'Enter search string: ' SEARCH_STRING
 
     INT=0
 
-    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r eg_FILENAME; do 
+    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
 
         INT=$((INT+1))
 
-        eg_ENTRYNAME=$(printf '%s\n' "$eg_FILENAME" | awk -F '_' '{print $2}')
+        ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
+        ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-        dg_ENTRYNAME=$(printf '%s\n' "$eg_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
-
-        printf '%s' "$dg_ENTRYNAME" | grep -ia "$SS" > /dev/null
+        printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null
 
         if [ $? -eq 0 ]; then
-            printf '%s\n' "(${INT}) ${dg_ENTRYNAME}"
+            printf '%s\n' "(${INT}) ${ENTRYNAME}"
         fi
 
     done
 
-    read -p 'Number of entry to get: ' EN 
+    read -p 'Number of entry to get: ' N_ENTRY 
 
-    eg_FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${EN}"p)
-    eg_ENTRYNAME=$(printf '%s\n' "$eg_FILENAME" | awk -F '_' '{print $2}')
-    dg_ENTRYNAME=$(printf '%s\n' "$eg_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
+    FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
+    ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
+    ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-    printf '%s' "The password for "${dg_ENTRYNAME}" is: " 
+    printf '%s' "The password for ${ENTRYNAME} is: " 
 
-    printf '%s\n' "$(sudo cat "${eg_FILENAME}")"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY";
-
+    decrypt "$(sudo cat "${FILENAME}")" ${KEY}
 }
 
 cmd_remove(){
     check_masterkey
 
-    TRUEKEY="$(printf '%s\n' $SHAKEY_REAL | sha512sum)"
-
-    read -p 'Enter search string: ' SS
-
-    printf "Searching vault for matches with "$SS"\n"
+    read -p 'Enter search string: ' SEARCH_STRING
 
     INT=0
 
-    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r er_FILENAME; do 
+    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
 
         INT=$((INT+1))
 
-        er_ENTRYNAME=$(printf '%s\n' "$er_FILENAME" | awk -F '_' '{print $2}')
+        ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
+        ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-        dr_ENTRYNAME=$(printf '%s\n' "$er_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
-
-        printf '%s' "$dr_ENTRYNAME" | grep -ia "$SS" > /dev/null
+        printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null
 
         if [ $? -eq 0 ]; then
-            printf '%s\n' "(${INT}) ${dr_ENTRYNAME}"
+            printf '%s\n' "(${INT}) ${ENTRYNAME}"
         fi
 
     done
 
-    read -p 'Number of entry to remove: ' EN 
+    read -p 'Number of entry to get: ' N_ENTRY 
 
-    er_FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${EN}"p)
-    er_ENTRYNAME=$(printf '%s\n' "$er_FILENAME" | awk -F '_' '{print $2}')
-    dr_ENTRYNAME=$(printf '%s\n' "$er_ENTRYNAME"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$TRUEKEY")
+    FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
+    ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
+    ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-    printf '%s\n' "Removing entry "${dr_ENTRYNAME}" ..." 
-
-    sudo rm $er_FILENAME
+    sudo rm $FILENAME
 
     if [ $? -eq 0 ]; then
-        printf '%s\n' "Entry sucessfully removed"
+        printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"
         exit 0
     fi
 
     exit 1
+}
+
+cmd_destroy(){
+    check_masterkey
+
+    if [ -d .vault ]; then
+        sudo rm -r .vault
+        printf '%s\n' "Vault successfully destroyed."
+        exit 0   
+    else
+        printf '%s\n' "There is no vault in this directory."
+        exit 1
+    fi
+
 }
 
 # HELP FUNCTIONS
@@ -211,6 +210,7 @@ vault_help() {
 	    $PROGRAM add        Add entry to vault. 
 	    $PROGRAM get        Get entry from vault.
 	    $PROGRAM remove     Remove existing entry.
+	    $PROGRAM destroy    Completely remove vault in current directory.
 	    $PROGRAM help       Show this text.
 	    $PROGRAM version    Show version information.
         $PROGRAM
@@ -222,10 +222,11 @@ vault_help() {
 check_root
 
 case "$1" in
-	init    ) shift; cmd_init   "$@" ;;
-    add     ) shift; cmd_add    "$@" ;;
-    get     ) shift; cmd_get    "$@" ;;
-    remove  ) shift; cmd_remove "$@" ;;
+	init    ) shift; cmd_init       "$@" ;;
+    add     ) shift; cmd_add        "$@" ;;
+    get     ) shift; cmd_get        "$@" ;;
+    remove  ) shift; cmd_remove     "$@" ;;
+    destroy ) shift; cmd_destroy    "$@" ;;
     version|--version|\? ) vault_version ;;
     help|--help|\? ) vault_help ;;
 	* )
