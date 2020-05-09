@@ -3,7 +3,7 @@
 # HASH, ENCRYPT AND DECRYPT FUNCTIONS
 
 hash() {
-    printf '%s\n' "$1" | openssl sha512 | awk '{ gsub("(stdin)= ","",$2); print $2}'
+    printf '%s\n' "$1" | openssl sha512 -r | awk '{ gsub(" *stdin","",$1); print $1}'
 }
 
 encrypt() {
