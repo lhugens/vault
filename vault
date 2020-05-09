@@ -7,11 +7,11 @@ hash() {
 }
 
 encrypt() {
-    printf '%s\n' "$1" | openssl enc -e -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$2" | tr '/' '-'
+    printf '%s\n' "$1" | openssl enc -e -aes-256-cbc -a -md sha512 -salt -k "$2" | tr '/' '-'
 }
 
 decrypt() {
-    printf '%s\n' "$1"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$2"
+    printf '%s\n' "$1"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -salt -k "$2"
 }
 
 
@@ -39,7 +39,8 @@ check_masterkey() {
     VAULT=$(pwd)/.vault
     read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
     SHAKEY_INPUT="$(hash ${MASTERKEY})"
-    SHAKEY_REAL=$(sudo find .vault/ | grep -a "key" | awk '{ gsub(".vault/key_","",$1); print $1}')
+    echo "${SHAKEY_INPUT}"  
+    SHAKEY_REAL=$(sudo find .vault | grep -a "key" | awk '{ gsub(".vault/key_","",$1); print $1}')
     
     if [ "$SHAKEY_INPUT" = "$SHAKEY_REAL" ]; then 
         sleep 1
@@ -76,6 +77,8 @@ cmd_init() {
         printf "Vault created in $VAULT\n"
     fi 
 
+    echo "$(hash "${MASTERKEY}")"
+
     sudo install -b -m 600 /dev/null $VAULT/"key_$(hash "${MASTERKEY}")"
 }
 
@@ -108,7 +111,7 @@ cmd_get(){
 
     INT=0
 
-    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
+    find .vault -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
 
         INT=$((INT+1))
 
@@ -125,7 +128,7 @@ cmd_get(){
 
     read -p 'Number of entry to get: ' N_ENTRY 
 
-    FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
+    FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
     ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
     ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
@@ -141,7 +144,7 @@ cmd_remove(){
 
     INT=0
 
-    find .vault/ -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
+    find .vault -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
 
         INT=$((INT+1))
 
@@ -158,7 +161,7 @@ cmd_remove(){
 
     read -p 'Number of entry to get: ' N_ENTRY 
 
-    FILENAME=$(find .vault/ -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
+    FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
     ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
     ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
