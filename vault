@@ -145,12 +145,12 @@ cmd_session() {
         read -p 'Choose action: ' VACT ; [[ -z "$VACT" ]] && { printf '%s\n' "Vault closed."; exit 1; }
         printf '%s\n' "-----------"
         case "$VACT" in
-            a | add)        cmd_add          ;;
-            g | get)        cmd_get          ;;
-            l | list)       cmd_list         ;;
-            r | remove)     cmd_remove       ;;
-            v | version)    vault_version    ;;
-            h | help)       vault_help       ;;
+            a|add)        cmd_add          ;;
+            g|get)        cmd_get          ;;
+            l|list)       cmd_list         ;;
+            r|remove)     cmd_remove       ;;
+            v|version)    vault_version    ;;
+            h|help)       vault_help       ;;
         	*)[[ ! -z "$VACT" ]] && { printf '%s\n' "Invalid action."; };;
         esac
     done
