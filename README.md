@@ -28,6 +28,7 @@ Usage: sudo vault [OPTION]
      init       Create vault in current directory.
      add        Add entry to vault. 
      get        Get entry from vault.
+     list       List vault entries.
      remove     Remove existing entry.
      destroy    Completely remove vault in current directory.
      session    Open vault and perform several actions.
