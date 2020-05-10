@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -o errexit
+set -o nounset
+
 # HASH, ENCRYPT AND DECRYPT FUNCTIONS
 
 hash() {
@@ -21,26 +24,21 @@ check_root() {
     if ! [ $(id -u) = 0 ]; then
         printf "The script has to be run as root." >&2
         exit 1
-    fi
-
-    if [ $SUDO_USER ]; then
-        REAL_USER=$SUDO_USER
     else
         REAL_USER=$(whoami)
     fi
 }
 
 check_masterkey() {
-    if ! [ -d .vault ]; then
-        printf "There is no vault in this directory."
-        exit 0
-    fi
-
-    VAULT=$(pwd)/.vault
+    [[ ! -d .vault ]] && \
+        { printf '%s\n' "error: There is no vault in this directory. Use 'init' to create one."; exit 1; } || \
+        { VAULT=$(pwd)/.vault ; }
+    
     read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
+    [[ -z "$MASTERKEY" ]] && { printf '%s\n' "error: Empty masterkey field."; exit 1; }
     SHAKEY_INPUT="$(hash ${MASTERKEY})"
     SHAKEY_REAL=$(sudo find .vault | grep -a "key" | awk '{ gsub(".vault/key_","",$1); print $1}')
-    
+   
     if [ "$SHAKEY_INPUT" = "$SHAKEY_REAL" ]; then 
         sleep 1
         KEY="$(hash ${MASTERKEY}${SHAKEY_INPUT})"
@@ -54,27 +52,25 @@ check_masterkey() {
 # CORE COMMAND FUNCTIONS
 
 cmd_init() {
-    if [ -d .vault ]; then
-        printf "There is already a vault in this directory. Quitting...\n"
-        exit 1
-    fi
+    [[ -d .vault ]] && \
+        { printf '%s\n' "error: There is already a vault in this directory. Use 'destroy' to remove it."; exit 1; }
 
     read -sp 'New masterkey: '      MASTERKEY   ; printf "\n"
+
+    [[ -z "$MASTERKEY" ]] && \
+        { printf '%s\n' "error: Empty masterkey field."; exit 1; }
+
     read -sp 'Confirm masterkey: '  MASTERKEY1  ; printf "\n"
 
-    if [ "$MASTERKEY" != "$MASTERKEY1" ]; then 
-        printf "Masterkeys did not match. Quitting...\n"  
-        exit 1  
-    else
-        printf "Masterkeys matched.\n"
-    fi
+    [ "$MASTERKEY" != "$MASTERKEY1" ] && \
+        { printf '%s\n' "error: Masterkeys did not match"; exit 1; } || 
+        { printf '%s\n' "Masterkeys match."; }
 
-    sudo mkdir -m 600 .vault 
+    sudo mkdir -m 600 .vault || { printf '%s\n' "error: Failed to porperly create vault."; exit 1; } 
 
-    if [ -d .vault ]; then
-        VAULT=$(pwd)/.vault
-        printf "Vault created in $VAULT\n"
-    fi 
+    [[ -d .vault ]] && \
+        { VAULT=$(pwd)/.vault; printf '%s\n' "Vault created in $VAULT"; } || \
+        { printf '%s\n' "error: Failed to create vault."; exit 1; } 
 
     sudo install -b -m 600 /dev/null $VAULT/"key_$(hash "${MASTERKEY}")"
 }
@@ -82,12 +78,14 @@ cmd_init() {
 cmd_add(){
     check_masterkey
 
-    read -p     'Enter id : '           ID
-    read -p     'Enter platform : '     PLATFORM
+    read -p     'Enter id: ' ID
+    [[ -z "$ID" ]] && { printf '%s\n' "error: Empty 'id' field."; exit 1; }
+    read -p     'Enter platform : ' PLATFORM
+    [[ -z "$PLATFORM" ]] && { printf '%s\n' "error: Empty 'platform' field."; exit 1; }
     stty -echo
-    read -sp    'Enter password : '     PASSWORD     ; printf "\n"
-
+    read -sp    'Enter password : ' PASSWORD     ; printf "\n"
     stty echo
+    [[ -z "$PASSWORD" ]] && { printf '%s\n' "error: Empty 'password' field."; exit 1; }
 
     ENTRYNAME=$(encrypt ${ID}_${PLATFORM} ${KEY})
     FILENAME=$VAULT/"entry_${ENTRYNAME}" 
@@ -98,7 +96,6 @@ cmd_add(){
     sudo printf '%s\n' "${CONTENT}" | sudo tee $FILENAME > /dev/null
 
     printf "Entry sucessfully stored.\n"
-    exit 0
 }
 
 cmd_get(){
@@ -148,42 +145,28 @@ cmd_remove(){
         ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
         ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-        printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null
-
-        if [ $? -eq 0 ]; then
-            printf '%s\n' "(${INT}) ${ENTRYNAME}"
-        fi
+        printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null &&
+            { printf '%s\n' "(${INT}) ${ENTRYNAME}" ; }
 
     done
 
-    read -p 'Number of entry to get: ' N_ENTRY 
+    read -p 'Number of entry to remove: ' N_ENTRY 
 
     FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
     ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
     ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-    sudo rm $FILENAME
-
-    if [ $? -eq 0 ]; then
-        printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"
-        exit 0
-    fi
-
-    exit 1
+    sudo rm $FILENAME && \
+        { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } ||
+        { printf '%s\n' "error: Failed to remove entry."; }
 }
 
 cmd_destroy(){
     check_masterkey
 
-    if [ -d .vault ]; then
-        sudo rm -r .vault
-        printf '%s\n' "Vault successfully destroyed."
-        exit 0   
-    else
-        printf '%s\n' "There is no vault in this directory."
-        exit 1
-    fi
-
+    [[ -d .vault ]] && \
+        { sudo rm -r .vault; printf '%s\n' "Vault sucessfully destroyed"; exit 0; } || \
+        { printf '%s\n' "error: There is no vault to destroy in this directory."; exit 1; } 
 }
 
 # HELP FUNCTIONS
@@ -222,11 +205,11 @@ vault_help() {
 check_root
 
 case "$1" in
-	init    ) shift; cmd_init       "$@" ;;
-    add     ) shift; cmd_add        "$@" ;;
-    get     ) shift; cmd_get        "$@" ;;
-    remove  ) shift; cmd_remove     "$@" ;;
-    destroy ) shift; cmd_destroy    "$@" ;;
+	init    ) shift; cmd_init        ;;
+    add     ) shift; cmd_add         ;;
+    get     ) shift; cmd_get         ;;
+    remove  ) shift; cmd_remove      ;;
+    destroy ) shift; cmd_destroy     ;;
     version|--version|\? ) vault_version ;;
     help|--help|\? ) vault_help ;;
 	* )
