@@ -89,50 +89,55 @@ cmd_add(){
 cmd_list() {
     read -p 'Enter search string: ' SEARCH_STRING
 
-    INT=0
+    i=0
+    j=0
 
     find .vault -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
 
-        INT=$((INT+1))
+        i=$((i+1))
 
         ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
         ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-        { printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null; } && \
-            { printf '%s\n' "(${INT}) ${ENTRYNAME}"; }
+        { printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null; } && \
+            { j=$((j+1)); printf '%s\n' "(${j}) ${ENTRYNAME}"; }
+    echo "$j"
     done
+
+    echo "$j"
+
+    [[ $j == 0 ]] && { printf '%s\n' "No matches found."; exit 1; } || { exit 0; }
 }
 
 entry_select() {
-    read -p 'Number of entry to get: ' N_ENTRY 
-
-    FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
-    ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
-    ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
-
-    printf '%s' "The password for ${ENTRYNAME} is: " 
+    read -p 'Numer of entry to get: ' N_ENTRY ; 
+    [[ -z "$N_ENTRY" ]] && \
+        { printf '%s\n' "error: Empty 'entry number' field."; exit 1; }
+        {
+            FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
+            ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
+            ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
+        }
 }
 
 cmd_get() {
     check_masterkey
 
-    cmd_list
-
-    entry_select
-
-    decrypt "$(sudo cat "${FILENAME}")" ${KEY}
+    cmd_list && \
+        { entry_select ; printf '%s' "The password for ${ENTRYNAME} is: "; decrypt "$(sudo cat "${FILENAME}")" ${KEY}; } || \
+        { exit 1; }
 }
 
 cmd_remove() {
     check_masterkey
     
-    cmd_list
-
-    entry_select
-
-    sudo rm $FILENAME && \
-        { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || \
-        { printf '%s\n' "error: Failed to remove entry."; }
+    cmd_list && \
+        {   entry_select; 
+            sudo rm $FILENAME && \
+                { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || \
+                { printf '%s\n' "error: Failed to remove entry."; }
+        } || \
+        { exit 1; }
 }
 
 cmd_destroy() {
@@ -166,6 +171,7 @@ vault_help() {
 	    $PROGRAM init       Create vault in current directory.
 	    $PROGRAM add        Add entry to vault. 
 	    $PROGRAM get        Get entry from vault.
+	    $PROGRAM list       List vault entries.
 	    $PROGRAM remove     Remove existing entry.
 	    $PROGRAM destroy    Completely remove vault in current directory.
 	    $PROGRAM help       Show this text.
@@ -182,6 +188,7 @@ case "$1" in
 	init    ) shift; cmd_init        ;;
     add     ) shift; cmd_add         ;;
     get     ) shift; cmd_get         ;;
+    list    ) shift; cmd_list        ;;
     remove  ) shift; cmd_remove      ;;
     destroy ) shift; cmd_destroy     ;;
     version|--version|\? ) vault_version ;;
