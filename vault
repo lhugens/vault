@@ -89,35 +89,32 @@ cmd_add(){
 cmd_list() {
     read -p 'Enter search string: ' SEARCH_STRING
 
-    i=0
-    j=0
+    ENTRIES=()
+    FILENAMES=()
 
-    find .vault -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
-
-        i=$((i+1))
+    while IFS= read -r FILENAME; do 
 
         ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
         ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
+        result="$(printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}")"
+        [[ ! -z "$result" ]] && { ENTRIES+=("$result"); FILENAMES+=("$FILENAME"); }
 
-        { printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null; } && \
-            { j=$((j+1)); printf '%s\n' "(${j}) ${ENTRYNAME}"; }
-    echo "$j"
-    done 
+    done <<< "$(find .vault -maxdepth 1 -type f | grep -a "entry")" 
 
-    echo "$j"
+    i=1
+    for entry in "${ENTRIES[@]}"
+    do
+        printf '%s\n' "(${i}) ${entry}"
+        i=$((i+1))
+    done
 
-    [[ $j == 0 ]] && { printf '%s\n' "No matches found."; exit 1; } || { exit 0; }
 }
 
 entry_select() {
-    read -p 'Numer of entry to get: ' N_ENTRY ; 
+    read -p 'Number of entry to get: ' N_ENTRY ; 
     [[ -z "$N_ENTRY" ]] && \
-        { printf '%s\n' "error: Empty 'entry number' field."; exit 1; }
-        {
-            FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
-            ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
-            ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
-        }
+        { printf '%s\n' "error: Empty 'entry number' field."; exit 1; } || \
+        { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; }
 }
 
 cmd_get() {
