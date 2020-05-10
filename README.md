@@ -30,6 +30,7 @@ Usage: sudo vault [OPTION]
      get        Get entry from vault.
      remove     Remove existing entry.
      destroy    Completely remove vault in current directory.
+     session    Open vault and perform several actions.
      help       Show this text.
      version    Show version information.
 
