@@ -21,12 +21,9 @@ decrypt() {
 # CHECK FUNCTIONS
 
 check_root() {
-    if ! [ $(id -u) = 0 ]; then
-        printf "The script has to be run as root." >&2
-        exit 1
-    else
-        REAL_USER=$(whoami)
-    fi
+    [[ ! $(id -u) = 0 ]] && \
+        { printf "The script has to be run as root." >&2; exit 1; } || \
+        { REAL_USER=$(whoami); }
 }
 
 check_masterkey() {
@@ -36,17 +33,13 @@ check_masterkey() {
     
     read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
     [[ -z "$MASTERKEY" ]] && { printf '%s\n' "error: Empty masterkey field."; exit 1; }
+
     SHAKEY_INPUT="$(hash ${MASTERKEY})"
     SHAKEY_REAL=$(sudo find .vault | grep -a "key" | awk '{ gsub(".vault/key_","",$1); print $1}')
-   
-    if [ "$SHAKEY_INPUT" = "$SHAKEY_REAL" ]; then 
-        sleep 1
-        KEY="$(hash ${MASTERKEY}${SHAKEY_INPUT})"
-    else
-        sleep 1
-        printf "Incorrect masterkey. Quitting...\n"
-        exit 1
-    fi
+
+    [[ "$SHAKEY_INPUT" == "$SHAKEY_REAL" ]] && \
+        { sleep 1; KEY="$(hash ${MASTERKEY}${SHAKEY_INPUT})"; } || \
+        { printf '%s\n' "Incorrect masterkey."; exit 1; } 
 }
 
 # CORE COMMAND FUNCTIONS
@@ -62,9 +55,9 @@ cmd_init() {
 
     read -sp 'Confirm masterkey: '  MASTERKEY1  ; printf "\n"
 
-    [ "$MASTERKEY" != "$MASTERKEY1" ] && \
-        { printf '%s\n' "error: Masterkeys did not match"; exit 1; } || 
-        { printf '%s\n' "Masterkeys match."; }
+    [[ "$MASTERKEY" == "$MASTERKEY1" ]] && \
+        { printf '%s\n' "Masterkeys match."; } || \
+        { printf '%s\n' "error: Masterkeys did not match."; exit 1; } 
 
     sudo mkdir -m 600 .vault || { printf '%s\n' "error: Failed to porperly create vault."; exit 1; } 
 
@@ -78,29 +71,22 @@ cmd_init() {
 cmd_add(){
     check_masterkey
 
-    read -p     'Enter id: ' ID
-    [[ -z "$ID" ]] && { printf '%s\n' "error: Empty 'id' field."; exit 1; }
-    read -p     'Enter platform : ' PLATFORM
-    [[ -z "$PLATFORM" ]] && { printf '%s\n' "error: Empty 'platform' field."; exit 1; }
-    stty -echo
-    read -sp    'Enter password : ' PASSWORD     ; printf "\n"
-    stty echo
+    read -p     'Enter id: '        ID ;        [[ -z "$ID" ]]          && { printf '%s\n' "error: Empty 'id' field."; exit 1; }
+    read -p     'Enter platform: ' PLATFORM ;   [[ -z "$PLATFORM" ]]    && { printf '%s\n' "error: Empty 'platform' field."; exit 1; }
+    stty -echo && read -sp    'Enter password: ' PASSWORD     ; printf "\n" && stty echo
     [[ -z "$PASSWORD" ]] && { printf '%s\n' "error: Empty 'password' field."; exit 1; }
 
     ENTRYNAME=$(encrypt ${ID}_${PLATFORM} ${KEY})
     FILENAME=$VAULT/"entry_${ENTRYNAME}" 
     CONTENT=$(encrypt ${PASSWORD} ${KEY})
 
-    sudo install -b -m 600 /dev/null $FILENAME
+    { sudo install -b -m 600 /dev/null $FILENAME ; sudo printf '%s\n' "${CONTENT}" | sudo tee $FILENAME > /dev/null; } && \
+        { printf '%s\n' "Entry sucessfully stored."; } || \
+        { printf '%s\n' "error: Failed to store entry."; }
 
-    sudo printf '%s\n' "${CONTENT}" | sudo tee $FILENAME > /dev/null
-
-    printf "Entry sucessfully stored.\n"
 }
 
-cmd_get(){
-    check_masterkey
-
+cmd_list() {
     read -p 'Enter search string: ' SEARCH_STRING
 
     INT=0
@@ -112,14 +98,12 @@ cmd_get(){
         ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
         ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
-        printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null
-
-        if [ $? -eq 0 ]; then
-            printf '%s\n' "(${INT}) ${ENTRYNAME}"
-        fi
-
+        { printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null; } && \
+            { printf '%s\n' "(${INT}) ${ENTRYNAME}"; }
     done
+}
 
+entry_select() {
     read -p 'Number of entry to get: ' N_ENTRY 
 
     FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
@@ -127,41 +111,31 @@ cmd_get(){
     ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
 
     printf '%s' "The password for ${ENTRYNAME} is: " 
+}
+
+cmd_get() {
+    check_masterkey
+
+    cmd_list
+
+    entry_select
 
     decrypt "$(sudo cat "${FILENAME}")" ${KEY}
 }
 
-cmd_remove(){
+cmd_remove() {
     check_masterkey
+    
+    cmd_list
 
-    read -p 'Enter search string: ' SEARCH_STRING
-
-    INT=0
-
-    find .vault -maxdepth 1 -type f | grep -a "entry" | while IFS= read -r FILENAME; do 
-
-        INT=$((INT+1))
-
-        ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
-        ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
-
-        printf '%s' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}" > /dev/null &&
-            { printf '%s\n' "(${INT}) ${ENTRYNAME}" ; }
-
-    done
-
-    read -p 'Number of entry to remove: ' N_ENTRY 
-
-    FILENAME=$(find .vault -maxdepth 1 -type f | grep -a "entry" | sed -n "${N_ENTRY}"p)
-    ENTRYNAME=$(printf '%s\n' "$FILENAME" | awk -F '_' '{print $2}')
-    ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
+    entry_select
 
     sudo rm $FILENAME && \
-        { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } ||
+        { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || \
         { printf '%s\n' "error: Failed to remove entry."; }
 }
 
-cmd_destroy(){
+cmd_destroy() {
     check_masterkey
 
     [[ -d .vault ]] && \
