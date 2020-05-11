@@ -142,16 +142,18 @@ cmd_session() {
     while [ "$VACT" != "c"  ]
     do
         printf '%s\n' "-----------"
-        read -p 'Choose action: ' VACT ; [[ -z "$VACT" ]] && { printf '%s\n' "Vault closed."; exit 1; }
+        read -p 'Action (a/g/l/r/h/q) : ' VACT ; 
         printf '%s\n' "-----------"
+        [[ -z "$VACT" ]] && { printf '%s\n' "Vault closed."; exit 1; }
         case "$VACT" in
             a|add)        cmd_add          ;;
             g|get)        cmd_get          ;;
             l|list)       cmd_list         ;;
             r|remove)     cmd_remove       ;;
             v|version)    vault_version    ;;
-            h|help)       vault_help       ;;
-        	*)[[ ! -z "$VACT" ]] && { printf '%s\n' "Invalid action."; };;
+            h|help)       session_help     ;;
+            q|quit)       { printf '%s\n' "Vault closed."; exit 0; };;
+        	*)[[ ! -z "$VACT" ]] && { printf '%s\n' "Invalid action."; } || exit 0;;
         esac
     done
 }
@@ -186,6 +188,19 @@ vault_help() {
 	    $PROGRAM help       Show this text.
 	    $PROGRAM version    Show version information.
         $PROGRAM
+	_EOF
+}
+
+session_help() {
+    PROGRAM=""
+	cat <<-_EOF
+	Actions:
+	    $PROGRAM a | add        Add entry to vault. 
+	    $PROGRAM g | get        Get entry from vault.
+	    $PROGRAM l | list       List vault entries.
+	    $PROGRAM r | remove     Remove existing entry.
+	    $PROGRAM h | help       Show this text.
+	    $PROGRAM q | quit       Quit session.
 	_EOF
 }
 
