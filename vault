@@ -111,7 +111,7 @@ cmd_list() {
 entry_select() {
     read -p 'Number of entry to get: ' N_ENTRY ; 
     [[ -z "$N_ENTRY" ]] && \
-        { printf '%s\n' "error: Empty 'entry number' field."; exit 1; } || \
+        { printf '%s\n' "error: Empty 'entry number' field."; } || \
         { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; }
 }
 
