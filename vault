@@ -142,7 +142,7 @@ cmd_session() {
     while [ "$VACT" != "c"  ]
     do
         printf '%s\n' "-----------"
-        read -p 'Action (a/g/l/r/h/q) : ' VACT ; 
+        read -p 'Action (a/g/l/r/[h]elp/[q]uit) : ' VACT ; 
         printf '%s\n' "-----------"
         [[ -z "$VACT" ]] && { printf '%s\n' "Vault closed."; exit 1; }
         case "$VACT" in
