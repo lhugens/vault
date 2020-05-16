@@ -91,11 +91,13 @@ cmd_list() {
     FILENAMES=()
 
     while IFS= read -r FILENAME; do 
-
-        ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}')
-        ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY})
-        result="$(printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}")"
-        [[ ! -z "$result" ]] && { ENTRIES+=("$result"); FILENAMES+=("$FILENAME"); }
+        [[ -z "$FILENAME" ]] && \
+        { printf '%s\n' "Vault is empty."; } || \
+        {   ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}');
+            ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY});
+            [[ ! -z "$(printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}")" ]] && \
+                {   result="$(printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}")";
+                    ENTRIES+=("$result"); FILENAMES+=("$FILENAME"); }; }
 
     done <<< "$(find .vault -maxdepth 1 -type f | grep -a "entry")" 
 
@@ -106,29 +108,32 @@ cmd_list() {
         i=$((i+1))
     done
 
+    true
+
 }
 
 entry_select() {
     read -p 'Number of entry to get: ' N_ENTRY ; 
-    [[ -z "$N_ENTRY" ]] && \
-        { printf '%s\n' "error: Empty 'entry number' field."; } || \
-        { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; }
+    [[ ! -z "$N_ENTRY" ]] && [[ "$N_ENTRY" -eq "$N_ENTRY" ]] && [[ ${N_ENTRY} -le ${#ENTRIES[@]} ]] && [[ ${N_ENTRY} -gt 0 ]] && \
+        { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; } || \
+        { printf '%s\n' "error: Invalid input."; false; }
 }
 
 cmd_get() {
-    cmd_list && \
-        { entry_select ; printf '%s' "The password for ${ENTRYNAME} is: "; decrypt "$(sudo cat "${FILENAME}")" ${KEY}; } || \
-        { exit 1; }
+    cmd_list
+    [ ${#ENTRIES[@]} -eq 0 ] && \
+        { printf '%s\n' "No matches found."; } || \
+        { entry_select && { printf '%s' "The password for ${ENTRYNAME} is: "; decrypt "$(sudo cat "${FILENAME}")" ${KEY}; }; }
 }
 
 cmd_remove() {
-    cmd_list && \
-        {   entry_select; 
+    cmd_list
+    [ ${#ENTRIES[@]} -eq 0 ] && \
+        { printf '%s\n' "No matches found."; } || \
+        {   entry_select ; 
             sudo rm $FILENAME && \
                 { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || \
-                { printf '%s\n' "error: Failed to remove entry."; }
-        } || \
-        { exit 1; }
+                { printf '%s\n' "error: Failed to remove entry."; }; }
 }
 
 cmd_destroy() {
@@ -138,6 +143,7 @@ cmd_destroy() {
 }
 
 cmd_session() {
+    session_help
     VACT=""
     while [ "$VACT" != "c"  ]
     do
