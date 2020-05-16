@@ -69,10 +69,10 @@ cmd_init() {
 }
 
 cmd_add(){
-    read -p     'Enter id: '        ID ;        [[ -z "$ID" ]]          && { printf '%s\n' "error: Empty 'id' field."; exit 1; }
-    read -p     'Enter platform: ' PLATFORM ;   [[ -z "$PLATFORM" ]]    && { printf '%s\n' "error: Empty 'platform' field."; exit 1; }
+    read -p     'Enter id: '        ID ;        [[ -z "$ID" ]]          && { printf '%s\n' "error: Empty 'id' field."; return 0; }
+    read -p     'Enter platform: ' PLATFORM ;   [[ -z "$PLATFORM" ]]    && { printf '%s\n' "error: Empty 'platform' field."; return 0; }
     stty -echo && read -sp    'Enter password: ' PASSWORD     ; printf "\n" && stty echo
-    [[ -z "$PASSWORD" ]] && { printf '%s\n' "error: Empty 'password' field."; exit 1; }
+    [[ -z "$PASSWORD" ]] && { printf '%s\n' "error: Empty 'password' field."; return 0; }
 
     ENTRYNAME=$(encrypt ${ID}_${PLATFORM} ${KEY})
     FILENAME=$VAULT/"entry_${ENTRYNAME}" 
@@ -114,8 +114,10 @@ cmd_list() {
 
 entry_select() {
     read -p 'Number of entry to get: ' N_ENTRY ; 
-    [[ ! -z "$N_ENTRY" ]] && [[ "$N_ENTRY" -eq "$N_ENTRY" ]] && [[ ${N_ENTRY} -le ${#ENTRIES[@]} ]] && [[ ${N_ENTRY} -gt 0 ]] && \
-        { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; } || \
+    [[ ! -z "$N_ENTRY" ]] && \
+    { [[ "$N_ENTRY" =~ ^[0-9]+$ ]] && \
+    { [[ ( ${N_ENTRY} -gt 0 ) && ( ${N_ENTRY} -le ${#ENTRIES[@]} ) ]] && \
+    { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; }; }; } || \
         { printf '%s\n' "error: Invalid input."; false; }
 }
 
@@ -123,17 +125,16 @@ cmd_get() {
     cmd_list
     [ ${#ENTRIES[@]} -eq 0 ] && \
         { printf '%s\n' "No matches found."; } || \
-        { entry_select && { printf '%s' "The password for ${ENTRYNAME} is: "; decrypt "$(sudo cat "${FILENAME}")" ${KEY}; }; }
+        { entry_select && \
+            { printf '%s' "The password for ${ENTRYNAME} is: "; decrypt "$(sudo cat "${FILENAME}")" ${KEY}; } || true; }
 }
 
 cmd_remove() {
     cmd_list
     [ ${#ENTRIES[@]} -eq 0 ] && \
         { printf '%s\n' "No matches found."; } || \
-        {   entry_select ; 
-            sudo rm $FILENAME && \
-                { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || \
-                { printf '%s\n' "error: Failed to remove entry."; }; }
+        { entry_select && \
+            { sudo rm $FILENAME && { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || { printf '%s\n' "error: Failed to remove entry."; }; } || true; }
 }
 
 cmd_destroy() {
