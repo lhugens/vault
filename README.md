@@ -36,3 +36,11 @@ Usage: sudo vault [OPTION]
      version    Show version information.
 
 ```
+
+## Transition vault to python
+
+Ideas:
+* use pycrypto to generate hash of masterkey and encrypted vesions of the passwords.
+* install pycrypto inside a python virtualenv, stored in a folder according to the XDG Base Directory Specification, store the script in /usr/local/bin, and at the top use a shebang that specifies the python interpreter of the virtualenv.
+* store the passwords in a .json file, facilitating user backups.
+* add the option of generating strong passwords.
