@@ -115,7 +115,7 @@ def a_get():
             j = input('Number: ')
             try:
                 j = int(j)
-                print(sesh.get(j))
+                print('The password is : ',sesh.get(j))
             except:
                 print('Input is not an integer.')
         else:
@@ -142,7 +142,7 @@ def a_remove():
         print('Empty search string.')
 
 def a_options():
-    print('options: (a)dd, (r)emove, (q)uit, (o)ptions')
+    print('options: (a)dd, (g)et, (r)emove, (q)uit, (o)ptions')
 
 
 parser = ArgumentParser()
