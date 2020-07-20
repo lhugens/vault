@@ -1,0 +1,3 @@
+
+	--> don't forget to add ~/.local/bin to $PATH in your shell config (eg. ~/.bashrc): 
+	export PATH="$HOME/.local/bin${PATH:+:${PATH}}"
