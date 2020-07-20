@@ -17,30 +17,28 @@ $ git clone https://github.com/lhugens/vault && cd vault && bash install.bash &&
 
 To remove the program, just run `bash uninstall.bash`.
 
+## Add the script to $PATH
+
+For convenience, add the ~/.local/bin directory, where the script resides, to your $PATH. \
+One way to do this is to add the following line to your shell config file (eg. ~/.bashrc):
+
+```
+export PATH="$HOME/.local/bin${PATH:+:${PATH}}"
+```
+
+## Dependencies
+
+It uses the PyCrypto package, which is installed in the python virtual environment "vault-venv". This setup is automatically done by install.bash. Both the script and the environment are stored in ~/.local/bin
+
 ## Usage
 
-There are five usage commands, which you can see by running `sudo vault help`:
+The vault can be open in a session, where the user can perform several actions sequentialy without needing to retype the vault key. It can also just perform one action (eg. "vault add").
 
 ```
-$ sudo vault help
-Usage: sudo vault [OPTION]
-        
-     init       Create vault in current directory.
-     add        Add entry to vault. 
-     get        Get entry from vault.
-     list       List vault entries.
-     remove     Remove existing entry.
-     destroy    Completely remove vault in current directory.
-     session    Open vault and perform several actions.
-     help       Show this text.
-     version    Show version information.
+$ vault session
+key: 
+options: (a)dd, (r)emove, (q)uit, (o)ptions
+--------------------
+option:
 
 ```
-
-## Transition vault to python
-
-Ideas:
-* use pycrypto to generate hash of masterkey and encrypted vesions of the passwords.
-* install pycrypto inside a python virtualenv, stored in a folder according to the XDG Base Directory Specification, store the script in /usr/local/bin, and at the top use a shebang that specifies the python interpreter of the virtualenv.
-* store the passwords in a .json file, facilitating user backups.
-* add the option of generating strong passwords.
