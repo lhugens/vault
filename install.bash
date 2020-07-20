@@ -1,16 +1,28 @@
-#!/bin/bash
+#!/usr/bin/bash
 
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        printf '%s\n' "This is a linux-gnu system."
-        SCRIPTDIR=/usr/local/bin
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-        printf '%s\n' "This is a macOS system."
-        SCRIPTDIR=/usr/local/bin
-fi
+she() { 
+echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+}
 
+[ -d ~/.local/bin ] || { mkdir ~/.local ;  mkdir ~/.local/bin ; }
 
-[ -f vault ] && sudo cp vault ${SCRIPTDIR} || true
+cp vault ~/.local/bin/. &&
 
-[ -f ${SCRIPTDIR}/vault ] && sudo chmod 100 ${SCRIPTDIR}/vault || true
+cd ~/.local/bin &&
 
-printf '%s\n' "Script location: "${SCRIPTDIR}/vault""
+python3 -m venv vault-venv &&
+
+vault-venv/bin/pip install --upgrade pip &&
+
+vault-venv/bin/pip install pycrypto &&
+
+abspath=$(she vault-venv/bin/python3) &&
+
+echo "#!$(echo "$abspath" )" | cat - vault > temp && mv temp vault &&
+
+chmod u+r+x vault && 
+
+cd - &&
+
+cat addtopath.txt
+

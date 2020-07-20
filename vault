@@ -1,237 +1,192 @@
-#!/bin/bash
 
-set -o errexit
-set -o nounset
+from os       import urandom, getcwd, path
+from hashlib  import sha256
+from base64   import b64encode, b64decode
+from json     import load, dump
+from re       import search
+from binascii import unhexlify
+from argparse import ArgumentParser
+from getpass  import getpass
+from sys      import exit
 
-# HASH, ENCRYPT AND DECRYPT FUNCTIONS
+from Crypto        import Random
+from Crypto.Cipher import AES
 
-hash() {
-    printf '%s\n' "$1" | openssl sha512 -r | awk '{ gsub(" *stdin","",$1); print $1}'
-}
-
-encrypt() {
-    printf '%s\n' "$1" | openssl enc -e -aes-256-cbc -a -md sha512 --pbkdf2 -iter 100000 -salt -k "$2" | tr '/' '-'
-}
-
-decrypt() {
-    printf '%s\n' "$1"  | tr '-' '/' | openssl enc -d -aes-256-cbc -a -md sha512 -pbkdf2 -iter 100000 -salt -k "$2"
-}
-
-
-# CHECK FUNCTIONS
-
-check_root() {
-    [[ ! $(id -u) = 0 ]] && \
-        { printf "The script has to be run as root." >&2; exit 1; } || \
-        { REAL_USER=$(whoami); }
-}
-
-check_masterkey() {
-    [[ ! -d .vault ]] && \
-        { printf '%s\n' "error: There is no vault in this directory. Use 'init' to create one."; exit 1; } || \
-        { VAULT=$(pwd)/.vault ; }
+class aestring:
+    def __init__(self, bkey): 
+        self.bkey = bkey
     
-    read -sp 'Enter masterkey: '      MASTERKEY ; printf "\n"
-    [[ -z "$MASTERKEY" ]] && { printf '%s\n' "error: Empty masterkey field."; exit 1; }
+    def pad(self, s):
+        bs = AES.block_size
+        return s + (bs - len(s) % bs) * chr(bs - len(s) % bs)
+    
+    def unpad(self, s):
+        return s[:-ord(s[len(s)-1:])]
+    
+    def encrypt(self, plain):
+        plain = self.pad(plain)
+        iv = urandom(16)
+        cipher = AES.new(self.bkey, AES.MODE_CBC, iv)
+        bstr = iv + cipher.encrypt(plain.encode())
+        return bstr.hex()
+    
+    def decrypt(self, enc):
+        enc = unhexlify(enc)
+        iv = enc[:AES.block_size]
+        cipher = AES.new(self.bkey, AES.MODE_CBC, iv)
+        return self.unpad(cipher.decrypt(enc[AES.block_size:])).decode('utf-8')
 
-    SHAKEY_INPUT="$(hash ${MASTERKEY})"
-    SHAKEY_REAL=$(sudo find .vault | grep -a "key" | awk '{ gsub(".vault/key_","",$1); print $1}')
+class session:
+    def __init__(self):
+        self.vname = '.vault'
+        self.check_vault()
+                
+    def check_vault(self):
+        if (not path.exists(self.vname)) or (not path.isfile(self.vname)):
+            self.keygen(getpass('New key: '))
+            self.dic = { sha256(urandom(16)).hexdigest() : self.hexkey }
 
-    [[ "$SHAKEY_INPUT" == "$SHAKEY_REAL" ]] && \
-        { sleep 1; KEY="$(hash ${MASTERKEY}${SHAKEY_INPUT})"; } || \
-        { printf '%s\n' "Incorrect masterkey."; exit 1; } 
-}
+            with open(self.vname, 'w') as outfile:
+                dump(self.dic, outfile)
 
-# CORE COMMAND FUNCTIONS
+            self.aes = aestring(self.bkey)
 
-cmd_init() {
-    [[ -d .vault ]] && \
-        { printf '%s\n' "error: There is already a vault in this directory. Use 'destroy' to remove it."; exit 1; }
+        else:
+            with open(self.vname) as json_file:
+                self.dic = load(json_file)
 
-    read -sp 'New masterkey: '      MASTERKEY   ; printf "\n"
+            self.keygen(getpass('key: '))
+            self.auth()
+            self.aes = aestring(self.bkey)
 
-    [[ -z "$MASTERKEY" ]] && \
-        { printf '%s\n' "error: Empty masterkey field."; exit 1; }
+    def keygen(self, key):
+        self.hexkey = sha256(key.encode()).hexdigest()
+        key = key + self.hexkey
+        self.bkey   = sha256(key.encode()).digest()
 
-    read -sp 'Confirm masterkey: '  MASTERKEY1  ; printf "\n"
+    def auth(self):
+        lst = list(self.dic.values())
+        if self.hexkey != lst[0]:
+            print('Wrong key')
+            exit()
+    
+    def dump(self):
+        lst = list(self.dic.keys())
+        for entry in lst[1:]:
+            print(self.aes.decrypt(entry))
+            
+    def search(self, s):
+        lst = list(self.dic.keys())
+        results = []
+        for i in range(1,len(lst)):
+            entry = self.aes.decrypt(lst[i])
+            if search(s, entry) != None:
+                results.append(entry)
+        return results
+            
+    def add(self, entry, passwd):
+        self.dic[self.aes.encrypt(entry)] = self.aes.encrypt(passwd)
+    
+    def remove(self, j):
+        lst = list(self.dic.keys())
+        del self.dic[lst[j]]
+    
+    def get(self, j):
+        lst = list(self.dic.values())
+        return self.aes.decrypt(lst[j])
+            
+    def save(self):
+        with open(self.vname, 'w') as outfile:
+            dump(self.dic, outfile)
 
-    [[ "$MASTERKEY" == "$MASTERKEY1" ]] && \
-        { printf '%s\n' "Masterkeys match."; } || \
-        { printf '%s\n' "error: Masterkeys did not match."; exit 1; } 
+def a_add():
+    entry_plain = input('Entry name: ')
+    sesh.add(entry_plain, getpass('Password: '))
+    sesh.save()
 
-    sudo mkdir -m 600 .vault || { printf '%s\n' "error: Failed to porperly create vault."; exit 1; } 
+def a_get():
+    ss = input('Search: ')
+    if ss != '':
+        results = sesh.search(ss)
+        size = len(results)
+        if size != 0:
+            for i in range(size):
+                print('{} {}'.format(str(i+1), results[i]))
+            j = input('Number: ')
+            try:
+                j = int(j)
+                print(sesh.get(j))
+            except:
+                print('Input is not an integer.')
+        else:
+            print('No matches found')
+    else:
+        print('Empty search string.')
 
-    [[ -d .vault ]] && \
-        { VAULT=$(pwd)/.vault; printf '%s\n' "Vault created in $VAULT"; } || \
-        { printf '%s\n' "error: Failed to create vault."; exit 1; } 
+def a_remove():
+    ss = input('Search: ')
+    if ss != '':
+        results = sesh.search(ss)
+        size = len(results)
+        if size != 0:
+            for i in range(size):
+                print('{} {}'.format(str(i+1), results[i]))
+            j = input('Number: ')
+            try:
+                j = int(j)
+                sesh.remove(j)
+                sesh.save()
+            except:
+                print('Input is not an integer.')
+    else:
+        print('Empty search string.')
 
-    sudo install -b -m 600 /dev/null $VAULT/"key_$(hash "${MASTERKEY}")"
-}
+def a_options():
+    print('options: (a)dd, (r)emove, (q)uit, (o)ptions')
 
-cmd_add(){
-    read -p     'Enter id: '        ID ;        [[ -z "$ID" ]]          && { printf '%s\n' "error: Empty 'id' field."; return 0; }
-    read -p     'Enter platform: ' PLATFORM ;   [[ -z "$PLATFORM" ]]    && { printf '%s\n' "error: Empty 'platform' field."; return 0; }
-    stty -echo && read -sp    'Enter password: ' PASSWORD     ; printf "\n" && stty echo
-    [[ -z "$PASSWORD" ]] && { printf '%s\n' "error: Empty 'password' field."; return 0; }
 
-    ENTRYNAME=$(encrypt ${ID}_${PLATFORM} ${KEY})
-    FILENAME=$VAULT/"entry_${ENTRYNAME}" 
-    CONTENT=$(encrypt ${PASSWORD} ${KEY})
+parser = ArgumentParser()
+parser.add_argument("option", help = 'options') 
+args = parser.parse_args()
 
-    { sudo install -b -m 600 /dev/null $FILENAME ; sudo printf '%s\n' "${CONTENT}" | sudo tee $FILENAME > /dev/null; } && \
-        { printf '%s\n' "Entry sucessfully stored."; } || \
-        { printf '%s\n' "error: Failed to store entry."; }
+if args.option in ['add', 'get', 'remove', 'session']:
+    sesh = session()
+    
+    if args.option == 'add':
+        a_add()
 
-}
+    if args.option == 'get':
+        a_get()
+                
+    if args.option == 'remove': 
+        a_remove()
 
-cmd_list() {
-    read -p 'Enter search string: ' SEARCH_STRING
+    if args.option == 'session': 
+        a_options()
+        while True:
+            print('--------------------')
+            option = input('option: ')
+            
+            if option in ['a', 'add']:
+                print(' ')
+                a_add()
 
-    ENTRIES=()
-    FILENAMES=()
+            elif option in ['g', 'get']:
+                print(' ')
+                a_get()
+                        
+            elif option in ['r', 'remove']:
+                print(' ')
+                a_remove()
+            
+            elif option in ['o', 'options']:
+                a_options()
 
-    while IFS= read -r FILENAME; do 
-        [[ -z "$FILENAME" ]] && \
-        { printf '%s\n' "Vault is empty."; } || \
-        {   ENTRYNAME=$(printf '%s\n' "${FILENAME}" | awk -F '_' '{print $2}');
-            ENTRYNAME=$(decrypt ${ENTRYNAME} ${KEY});
-            [[ ! -z "$(printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}")" ]] && \
-                {   result="$(printf '%s\n' "${ENTRYNAME}" | grep -ia "${SEARCH_STRING}")";
-                    ENTRIES+=("$result"); FILENAMES+=("$FILENAME"); }; }
+            elif option in ['q', 'quit']:
+                exit()
 
-    done <<< "$(find .vault -maxdepth 1 -type f | grep -a "entry")" 
+            else:
+                print('Not an option. ')
 
-    i=1
-    for entry in "${ENTRIES[@]}"
-    do
-        printf '%s\n' "(${i}) ${entry}"
-        i=$((i+1))
-    done
-
-    true
-
-}
-
-entry_select() {
-    read -p 'Number of entry to get: ' N_ENTRY ; 
-    [[ ! -z "$N_ENTRY" ]] && \
-    { [[ "$N_ENTRY" =~ ^[0-9]+$ ]] && \
-    { [[ ( ${N_ENTRY} -gt 0 ) && ( ${N_ENTRY} -le ${#ENTRIES[@]} ) ]] && \
-    { N_ENTRY=$((N_ENTRY-1)); ENTRYNAME=${ENTRIES[${N_ENTRY}]}; FILENAME=${FILENAMES[${N_ENTRY}]}; }; }; } || \
-        { printf '%s\n' "error: Invalid input."; false; }
-}
-
-cmd_get() {
-    cmd_list
-    [ ${#ENTRIES[@]} -eq 0 ] && \
-        { printf '%s\n' "No matches found."; } || \
-        { entry_select && \
-            { printf '%s' "The password for ${ENTRYNAME} is: "; decrypt "$(sudo cat "${FILENAME}")" ${KEY}; } || true; }
-}
-
-cmd_remove() {
-    cmd_list
-    [ ${#ENTRIES[@]} -eq 0 ] && \
-        { printf '%s\n' "No matches found."; } || \
-        { entry_select && \
-            { sudo rm $FILENAME && { printf '%s\n' "Entry ${ENTRYNAME} sucessfully removed"; } || { printf '%s\n' "error: Failed to remove entry."; }; } || true; }
-}
-
-cmd_destroy() {
-    [[ -d .vault ]] && \
-        { sudo rm -r .vault; printf '%s\n' "Vault sucessfully destroyed"; exit 0; } || \
-        { printf '%s\n' "error: There is no vault to destroy in this directory."; exit 1; } 
-}
-
-cmd_session() {
-    session_help
-    VACT=""
-    while [ "$VACT" != "c"  ]
-    do
-        printf '%s\n' "-----------"
-        read -p 'Action (a/g/l/r/[h]elp/[q]uit) : ' VACT ; 
-        printf '%s\n' "-----------"
-        [[ -z "$VACT" ]] && { printf '%s\n' "Vault closed."; exit 1; }
-        case "$VACT" in
-            a|add)        cmd_add          ;;
-            g|get)        cmd_get          ;;
-            l|list)       cmd_list         ;;
-            r|remove)     cmd_remove       ;;
-            v|version)    vault_version    ;;
-            h|help)       session_help     ;;
-            q|quit)       { printf '%s\n' "Vault closed."; exit 0; };;
-        	*)[[ ! -z "$VACT" ]] && { printf '%s\n' "Invalid action."; } || exit 0;;
-        esac
-    done
-}
-
-# HELP FUNCTIONS
-
-vault_version() {
-	cat <<-_EOF
-	=============================================
-	= vault: the standard unix password vault   =
-	=                                           =
-	=                  v0.0.1                   =
-	=                                           =
-	=              Leonardo Hügens              =
-	=        https://github.com/lhugens/        =
-	=                                           =
-	=============================================
-	_EOF
-}
-
-vault_help() {
-    PROGRAM=""
-	cat <<-_EOF
-	Usage: sudo vault [OPTION]
-        $PROGRAM
-	    $PROGRAM init       Create vault in current directory.
-	    $PROGRAM add        Add entry to vault. 
-	    $PROGRAM get        Get entry from vault.
-	    $PROGRAM list       List vault entries.
-	    $PROGRAM remove     Remove existing entry.
-	    $PROGRAM destroy    Completely remove vault in current directory.
-	    $PROGRAM help       Show this text.
-	    $PROGRAM version    Show version information.
-        $PROGRAM
-	_EOF
-}
-
-session_help() {
-    PROGRAM=""
-	cat <<-_EOF
-	Actions:
-	    $PROGRAM a | add        Add entry to vault. 
-	    $PROGRAM g | get        Get entry from vault.
-	    $PROGRAM l | list       List vault entries.
-	    $PROGRAM r | remove     Remove existing entry.
-	    $PROGRAM h | help       Show this text.
-	    $PROGRAM q | quit       Quit session.
-	_EOF
-}
-
-# FUNCTION CALLING
-
-check_root
-
-case "$1" in
-	init    ) shift; check_root;                  cmd_init        ;;
-    add     ) shift; check_root; check_masterkey; cmd_add         ;;
-    get     ) shift; check_root; check_masterkey; cmd_get         ;;
-    list    ) shift; check_root; check_masterkey; cmd_list        ;;
-    remove  ) shift; check_root; check_masterkey; cmd_remove      ;;
-    destroy ) shift; check_root; check_masterkey; cmd_destroy     ;;
-    session ) shift; check_root; check_masterkey; cmd_session     ;;
-    version|--version|\? ) vault_version ;;
-    help|--help|\? ) vault_help ;;
-	* )
-		if [ ! -z "$1" ]; then
-            printf '%s\n' "Wrong usage of vault."
-            vault_help
-        else
-            vault_help
-		fi
-		;;
-esac
-exit 0
+else:
+    exit()
