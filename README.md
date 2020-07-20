@@ -12,7 +12,7 @@ I hope this script will eventually be analysed by security experts so that it ca
 Clone the repository, hop into the repo's directory and run `bash install.bash`, like so:
 
 ```
-$ git clone https://github.com/lhugens/vault && cd vault && bash install.bash && cd -
+git clone https://github.com/lhugens/vault && cd vault && bash install.bash && cd -
 ```
 
 To remove the program, just run `bash uninstall.bash`.
@@ -40,5 +40,4 @@ key:
 options: (a)dd, (r)emove, (q)uit, (o)ptions
 --------------------
 option:
-
 ```
