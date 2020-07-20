@@ -6,7 +6,7 @@ echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 
 [ -d ~/.local/bin ] || { mkdir ~/.local ;  mkdir ~/.local/bin ; }
 
-cp vault ~/.local/bin/. &&
+cp vault ~/.local/bin/vault &&
 
 cd ~/.local/bin &&
 
