@@ -1,7 +1,6 @@
 ## About
 
-Vault is a password-storage utility. It stores passwords using the AES encryption protocol, which can later be decrypted and read by the vault owner. \
-The password are encrypted using the AES protocol and stored in hexadecimal form in a JSON file, '.vault'. Upon the creation of a vault, the user must define the vault's key, which is used in the encryption algorithm.
+Vault is a password-storage utility. It encrypts and stores passwords locally, which can later be retried by the user. The passwords are encrypted using the AES protocol and stored in hexadecimal form in a JSON file, '.vault'. Upon the creation of a vault, the user must define the vault's key, which is used in the encryption algorithm.
 
 ## WARNING
 
