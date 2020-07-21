@@ -35,9 +35,12 @@ It uses the PyCrypto package, which is installed in the python virtual environme
 The vault can be open in a session, where the user can perform several actions sequentialy without needing to retype the vault key. It can also just perform one action (eg. "vault add").
 
 ```
-$ vault session
-key: 
-options: (a)dd, (r)emove, (q)uit, (o)ptions
---------------------
-option:
+$ vault --help
+usage: vault [-h] option
+
+positional arguments:
+  option      (a)dd, (l)ist, (s)earch, (g)et, (r)emove, session
+
+optional arguments:
+  -h, --help  show this help message and exit
 ```
