@@ -105,8 +105,8 @@ class session:
 ##############################
 
 def a_add():
-    entry_plain = input('Entry name: ')
-    sesh.add(entry_plain, getpass('Password: '))
+    entry_plain =           input('--> entry name : ')
+    sesh.add(entry_plain, getpass('--> password   : '))
     sesh.save()
 
 def a_list():
@@ -114,7 +114,7 @@ def a_list():
         print('{} {}'.format(str(i+1), sesh.entries[i]))
 
 def a_search():
-    ss = input('Search: ')
+    ss = input('--> search: ')
     if ss != '':
         index = sesh.search(ss)
         size = len(index)
@@ -124,25 +124,27 @@ def a_search():
         else:
             print('No matches found')
     else:
-        print('Empty search string.')
+        print('error : Empty search string.')
 
 
 def a_get():
-    j = input('Number: ')
+    j = input('--> number: ')
     try:
         j = int(j)
-        print('The password is : ',sesh.get(j))
+        print('entry name : {} '.format(sesh.entries[j-1]))
+        print('password   : {} '.format(sesh.get(j)))
     except:
-        print('Input is not an integer.')
+        print('error : Input is not an integer.')
 
 def a_remove():
-    j = input('Number: ')
+    j = input('--> number: ')
     try:
         j = int(j)
+        print('removed entry : {} '.format(sesh.entries[j-1]))
         sesh.remove(j)
         sesh.save()
     except:
-        print('Input is not an integer.')
+        print('error : Input is not a valid integer.')
 
 ###########################
 ######## ARGPARSER ########
@@ -171,33 +173,33 @@ if args.option in ['add', 'list', 'search', 'get', 'remove', 'session']:
         a_remove()
     
     if args.option == 'session': 
-        a_options()
+        print('options: (a)dd, (l)ist, (s)earch, (g)et, (r)emove, (q)uit, (o)ptions')
         while True:
-            print('--------------------')
-            option = input('option: ')
+            option = input('------> select option: ')
             
             if option in ['a', 'add']:
-                print(' ')
                 a_add()
+                print(' ')
 
             elif option in ['l', 'list']:
-                print(' ')
                 a_list()
+                print(' ')
 
             elif option in ['s', 'search']:
-                print(' ')
                 a_search()
+                print(' ')
 
             elif option in ['g', 'get']:
-                print(' ')
                 a_get()
+                print(' ')
                         
             elif option in ['r', 'remove']:
-                print(' ')
                 a_remove()
+                print(' ')
             
             elif option in ['o', 'options']:
                 print('options: (a)dd, (l)ist, (s)earch, (g)et, (r)emove, (q)uit, (o)ptions')
+                print(' ')
 
             elif option in ['q', 'quit']:
                 exit()
