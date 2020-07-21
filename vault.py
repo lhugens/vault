@@ -1,3 +1,4 @@
+#!/home/hugens/devel/env/bin/python3
 
 from os       import urandom, getcwd, path
 from hashlib  import sha256
@@ -50,6 +51,7 @@ class session:
                 dump(self.dic, outfile)
 
             self.aes = aestring(self.bkey)
+            self.upd_entries()
 
         else:
             with open(self.vname) as json_file:
@@ -58,6 +60,7 @@ class session:
             self.keygen(getpass('key: '))
             self.auth()
             self.aes = aestring(self.bkey)
+            self.upd_entries()
 
     def keygen(self, key):
         self.hexkey = sha256(key.encode()).hexdigest()
@@ -69,27 +72,26 @@ class session:
         if self.hexkey != lst[0]:
             print('Wrong key')
             exit()
-    
-    def dump(self):
+
+    def upd_entries(self):
         lst = list(self.dic.keys())
-        for entry in lst[1:]:
-            print(self.aes.decrypt(entry))
+        self.entries = [self.aes.decrypt(lst[i]) for i in range(1, len(lst))] 
             
     def search(self, s):
-        lst = list(self.dic.keys())
-        results = []
-        for i in range(1,len(lst)):
-            entry = self.aes.decrypt(lst[i])
-            if search(s, entry) != None:
-                results.append(entry)
-        return results
+        index = []
+        for i in range(len(self.entries)):
+            if search(s, self.entries[i]) != None:
+                index.append(i)
+        return index
             
     def add(self, entry, passwd):
         self.dic[self.aes.encrypt(entry)] = self.aes.encrypt(passwd)
+        self.upd_entries()
     
     def remove(self, j):
         lst = list(self.dic.keys())
         del self.dic[lst[j]]
+        self.upd_entries()
     
     def get(self, j):
         lst = list(self.dic.values())
@@ -99,68 +101,76 @@ class session:
         with open(self.vname, 'w') as outfile:
             dump(self.dic, outfile)
 
+##############################
+######## ARGFUNCTIONS ########
+##############################
+
 def a_add():
     entry_plain = input('Entry name: ')
     sesh.add(entry_plain, getpass('Password: '))
     sesh.save()
 
-def a_get():
+def a_list():
+    for i in range(len(sesh.entries)): 
+        print('{} {}'.format(str(i+1), sesh.entries[i]))
+
+def a_search():
     ss = input('Search: ')
     if ss != '':
-        results = sesh.search(ss)
-        size = len(results)
+        index = sesh.search(ss)
+        size = len(index)
         if size != 0:
             for i in range(size):
-                print('{} {}'.format(str(i+1), results[i]))
-            j = input('Number: ')
-            try:
-                j = int(j)
-                print('The password is : ',sesh.get(j))
-            except:
-                print('Input is not an integer.')
+                print('{} {}'.format(str(index[i]+1), sesh.entries[index[i]]))
         else:
             print('No matches found')
     else:
         print('Empty search string.')
 
+
+def a_get():
+    j = input('Number: ')
+    try:
+        j = int(j)
+        print('The password is : ',sesh.get(j))
+    except:
+        print('Input is not an integer.')
+
 def a_remove():
-    ss = input('Search: ')
-    if ss != '':
-        results = sesh.search(ss)
-        size = len(results)
-        if size != 0:
-            for i in range(size):
-                print('{} {}'.format(str(i+1), results[i]))
-            j = input('Number: ')
-            try:
-                j = int(j)
-                sesh.remove(j)
-                sesh.save()
-            except:
-                print('Input is not an integer.')
-    else:
-        print('Empty search string.')
+    j = input('Number: ')
+    try:
+        j = int(j)
+        sesh.remove(j)
+        sesh.save()
+    except:
+        print('Input is not an integer.')
 
-def a_options():
-    print('options: (a)dd, (g)et, (r)emove, (q)uit, (o)ptions')
+###########################
+######## ARGPARSER ########
+###########################
 
-
-parser = ArgumentParser()
-parser.add_argument("option", help = 'options') 
+parser = ArgumentParser(prog = 'vault')
+parser.add_argument("option", help = '(a)dd, (l)ist, (s)earch, (g)et, (r)emove, session')
 args = parser.parse_args()
 
-if args.option in ['add', 'get', 'remove', 'session']:
+if args.option in ['add', 'list', 'search', 'get', 'remove', 'session']:
     sesh = session()
     
-    if args.option == 'add':
+    if args.option in ['a', 'add']:
         a_add()
 
-    if args.option == 'get':
+    if args.option in ['l', 'list']:
+        a_list()
+
+    if args.option in ['s', 'search']:
+        a_search()
+
+    if args.option in ['g', 'get']:
         a_get()
                 
-    if args.option == 'remove': 
+    if args.option in ['r', 'remove']:
         a_remove()
-
+    
     if args.option == 'session': 
         a_options()
         while True:
@@ -171,6 +181,14 @@ if args.option in ['add', 'get', 'remove', 'session']:
                 print(' ')
                 a_add()
 
+            elif option in ['l', 'list']:
+                print(' ')
+                a_list()
+
+            elif option in ['s', 'search']:
+                print(' ')
+                a_search()
+
             elif option in ['g', 'get']:
                 print(' ')
                 a_get()
@@ -180,13 +198,14 @@ if args.option in ['add', 'get', 'remove', 'session']:
                 a_remove()
             
             elif option in ['o', 'options']:
-                a_options()
+                print('options: (a)dd, (l)ist, (s)earch, (g)et, (r)emove, (q)uit, (o)ptions')
 
             elif option in ['q', 'quit']:
                 exit()
 
             else:
                 print('Not an option. ')
+                print('options: (a)dd, (l)ist, (s)earch, (g)et, (r)emove, (q)uit, (o)ptions')
 
 else:
     exit()
