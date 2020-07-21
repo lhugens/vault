@@ -1,4 +1,3 @@
-#!/home/hugens/devel/env/bin/python3
 
 from os       import urandom, getcwd, path
 from hashlib  import sha256
